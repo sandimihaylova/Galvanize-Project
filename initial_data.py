@@ -52,7 +52,7 @@ for contract_id in contracts['id']:
             cr.append(random())
         for i in range(len(edges)):
             print edges[i][0],edges[i][1]
-            yr.append(LpVariable("y_%s_%s:%s_%s" % (contract_id, tanker_id, edges[i][0], edges[i][1]), cat='Integer',lowBound=0))
+            yr.append(LpVariable("y_%s_%s:%s_%s" % (contract_id, tanker_id, edges[i][0], edges[i][1]), cat='Binary',lowBound=0))
             r_times.append(flight_times[destinations[edges[i][0]]]\
             [destinations[edges[i][1]]])
         xt.append(xr)
@@ -100,18 +100,16 @@ for c in range(len(x)):
         # print "t: ", t, fuel_burned
         prob += offloaded <= disposable_fuel
 
+# edge variables reflect node variables
 for c in range(len(x)):
     for t in range(len(x[c])):
-        # for location_id in locations:
-        #     visits = lpSum([x[c][t][r] for r in range(len(requests)) if requests['airspace_id'][r] == location_id])
-        #     expected_edges = visits * 2
-        #     visited_edges = lpSum([y[c][t][i] for i in range(len(edges)) if location_id in edges[i]])
-        #     prob += expected_edges == visited_edges
         for r in range(len(requests)):
             inbound = lpSum([y[c][t][i] for i in range(len(edges)) if r == edges[i][0]])
             outbound = lpSum([y[c][t][i] for i in range(len(edges)) if r == edges[i][1]])
+            homebase = lpSum([y[c][t][i] for i in range(len(edges)) if contracts['base_id'][c] in edges[i]])
             prob += x[c][t][r] == inbound
             prob += x[c][t][r] == outbound
+            prob += homebase == 2
 
 
 prob.writeLP("prob_data.lp")
