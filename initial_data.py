@@ -4,10 +4,12 @@ from random import random
 import itertools
 
 requests = pd.read_excel('data/sample_requests_min.xlsx')
-#TODO sort by requestsed at and reasssign index
+# TODO sort by requestsed at and reasssign index
 # requests = requests.sort_values('requested_at')
 contracts = pd.read_excel('data/sample_contracts_min.xlsx')
 flight_times = pd.read_excel('data/sample_flight_times.xlsx')
+compatibility = pd.read_excel('data/compatibility_sample_min.xlsx')
+contract_compatibility = pd.read_excel('data/j_contract_configured_tanker_sample_min.xlsx')
 
 
 prob = LpProblem('Tanker Assignment', LpMinimize)
@@ -15,6 +17,7 @@ prob = LpProblem('Tanker Assignment', LpMinimize)
 # Variables
 # TODO fix cost function, minimize fuel remaining/sorties, et
 # TODO configuration combaitibility
+# TODO currently, forces outbound/inbound from homebase if sortie not used
 
 
 base_request = list(contracts['base_id']) + list(requests['id'])
@@ -32,6 +35,21 @@ paths = []
 for path in path_list:
     if path not in paths:
         paths.append(path)
+
+# Compatibilities
+ci = list(contract_compatibility.contract_id)
+cti = list(contract_compatibility.configured_tanker_Id)
+contract_configs = zip(ci, cti)
+config_contract = {}
+for tanker, config in contract_configs:
+    config_contract.setdefault(tanker, []).append(config)
+
+compat_cti = list(compatibility.configured_tanker_id)
+compat_ri = list(compatibility.receiver_id)
+compat = zip(compat_cti, compat_ri)
+compats = {}
+for c_tanker, receiver in compat:
+    compats.setdefault(c_tanker, []).append(receiver)
 
 
 # only time feasible edges
@@ -86,7 +104,7 @@ obj = [zip(itertools.chain(*x[i]), itertools.chain(*cost[i])) for i in range(len
 travel = [zip(itertools.chain(*y[i]), itertools.chain(*times[i])) for i in range(len(y))]
 obj_flat = [item for sublist in obj for item in sublist]
 travel_flat = [item for sublist in travel for item in sublist]
-prob += LpAffineExpression(obj_flat)
+# prob += LpAffineExpression(obj_flat)
 prob += LpAffineExpression(travel_flat)
 
 #Constraints
