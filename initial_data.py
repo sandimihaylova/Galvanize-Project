@@ -15,7 +15,6 @@ prob = LpProblem('Tanker Assignment', LpMinimize)
 # Variables
 # TODO fix cost function, minimize fuel remaining/sorties, etc
 
-# locations = list(itertools.combinations_with_replacement(list(flight_times.columns),2)
 
 base_request = list(contracts['base_id']) + list(requests['id'])
 request_request = list(requests['id'])
@@ -92,13 +91,11 @@ for r in range(len(requests)):
 # everythin but fuel burned
 for c in range(len(x)):
     for t in range(len(x[c])):
-
         disposable_fuel = contracts['takeoff_fuel'][c] - contracts['climbout_fuel'][c] - contracts['fuel_reserves'][c] + contracts['over_frag'][c]
         offloaded = lpSum([x[c][t][r] * requests['amount'][r] for r in range(len(requests))])
-        # time = lpSum([x[c][t][r] * x[c][t][r-1] * flight_times[requests['airspace_id'][r-1]][requests['airspace_id'][r]] for r in range(1, len(requests))])
-        # fuel_burned = contracts['avg_burn_rate_per_hr'] * time
-        # print "t: ", t, fuel_burned
-        prob += offloaded <= disposable_fuel
+        time = lpSum([y[c][t][e] * times[c][t][e] for e in range(len(edges))])
+        fuel_burned = time/60. * contracts['avg_burn_rate_per_hr'][c]
+        prob += offloaded + fuel_burned <= disposable_fuel
 
 # edge variables reflect node variables
 for c in range(len(x)):
@@ -109,8 +106,7 @@ for c in range(len(x)):
             homebase = lpSum([y[c][t][i] for i in range(len(edges)) if contracts['base_id'][c] in edges[i]])
             prob += x[c][t][r] == inbound
             prob += x[c][t][r] == outbound
-            prob += homebase == 2
-
+            prob += homebase <= 2
 
 prob.writeLP("prob_data.lp")
 prob.solve()
