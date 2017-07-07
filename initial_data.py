@@ -13,7 +13,8 @@ flight_times = pd.read_excel('data/sample_flight_times.xlsx')
 prob = LpProblem('Tanker Assignment', LpMinimize)
 
 # Variables
-# TODO fix cost function, minimize fuel remaining/sorties, etc
+# TODO fix cost function, minimize fuel remaining/sorties, et
+# TODO configuration combaitibility
 
 
 base_request = list(contracts['base_id']) + list(requests['id'])
@@ -23,14 +24,32 @@ request_base = list(requests['id']) + list(contracts['base_id'])
 destination_airspace = list(contracts['base_id']) + list(requests['airspace_id'])
 destinations = dict(zip(base_request, destination_airspace))
 
-edge_list = list(itertools.combinations(base_request,2)) +\
+path_list = list(itertools.combinations(base_request,2)) +\
 list(itertools.combinations(request_request,2)) +\
 list(itertools.combinations(request_base,2))
 
+paths = []
+for path in path_list:
+    if path not in paths:
+        paths.append(path)
+
+
+# only time feasible edges
 edges = []
-for edge in edge_list:
-    if edge not in edges:
-        edges.append(edge)
+edge_times = []
+for p in paths:
+    if p[0] in requests['id'] and p[1] in requests['id']:
+        transit_time = flight_times[destinations[p[0]]][destinations[p[1]]]
+        time_between = (requests['requested_at'][p[1]] - requests['requested_at'][p[0]]).seconds/60.
+        if time_between >= transit_time:
+            edges.append(p)
+            edge_times.append(time_between)
+    elif p[0] not in requests['id'] and p[1] not in requests['id']:
+        continue
+    else:
+        edges.append(p)
+        edge_times.append(flight_times[destinations[p[0]]][destinations[p[1]]])
+
 
 x = []
 y = []
@@ -50,10 +69,8 @@ for contract_id in contracts['id']:
             xr.append(LpVariable("x_%s_%s:%s" % (contract_id, tanker_id, request_id), cat='Binary'))
             cr.append(random())
         for i in range(len(edges)):
-            print edges[i][0],edges[i][1]
             yr.append(LpVariable("y_%s_%s:%s_%s" % (contract_id, tanker_id, edges[i][0], edges[i][1]), cat='Binary',lowBound=0))
-            r_times.append(flight_times[destinations[edges[i][0]]]\
-            [destinations[edges[i][1]]])
+            r_times.append(edge_times[i])
         xt.append(xr)
         yt.append(yr)
         t_times.append(r_times)
@@ -80,21 +97,15 @@ x_tanker = [item for sublist in x for item in sublist]
 for r in range(len(requests)):
     prob += lpSum([x_tanker[t][r] for t in range(len(x_tanker))]) == 1
 
-# Sortie is time feasible
-# for t in x_tanker:
-#     prob += LpConstraint([flight_times[requests['airspace_id'][r]][requests['airspace_id'][r-1]] - \
-#     (requests['requested_at'][r] - requests['requested_at'][r-1]).seconds/60. \
-#     for r in range(1, len(requests))] <= 0)
-
 
 # Fuel feasible constraint
-# everythin but fuel burned
+# fuel burned based off of transit time, not loiter
 for c in range(len(x)):
     for t in range(len(x[c])):
         disposable_fuel = contracts['takeoff_fuel'][c] - contracts['climbout_fuel'][c] - contracts['fuel_reserves'][c] + contracts['over_frag'][c]
         offloaded = lpSum([x[c][t][r] * requests['amount'][r] for r in range(len(requests))])
-        time = lpSum([y[c][t][e] * times[c][t][e] for e in range(len(edges))])
-        fuel_burned = time/60. * contracts['avg_burn_rate_per_hr'][c]
+        time_inflight = lpSum([y[c][t][e] * times[c][t][e] for e in range(len(edges))])
+        fuel_burned = time_inflight/60. * contracts['avg_burn_rate_per_hr'][c]
         prob += offloaded + fuel_burned <= disposable_fuel
 
 # edge variables reflect node variables
@@ -106,7 +117,7 @@ for c in range(len(x)):
             homebase = lpSum([y[c][t][i] for i in range(len(edges)) if contracts['base_id'][c] in edges[i]])
             prob += x[c][t][r] == inbound
             prob += x[c][t][r] == outbound
-            prob += homebase <= 2
+            prob += homebase == 2
 
 prob.writeLP("prob_data.lp")
 prob.solve()
