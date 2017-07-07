@@ -103,7 +103,7 @@ for contract_id in contracts['id']:
             r_times_c = []
             for request_id in requests['id']:
                 xrc.append(LpVariable("x_%s_%s (%s): %s" % (contract_id, tanker_id, config_id, request_id), cat='Binary'))
-                crc.append(random())
+                crc.append(1 if request_id in requests_for_config_tanker[config_id] else 0)
             for i in range(len(edges)):
                 yrc.append(LpVariable("y_%s_%s (%s):%s_%s" % (contract_id, tanker_id, config_id, edges[i][0], edges[i][1]), cat='Binary',lowBound=0))
                 r_times_c.append(edge_times[i])
@@ -161,7 +161,14 @@ for c in range(len(x)):
                 homebase = lpSum([y[c][t][i][j] for j in range(len(edges)) if contracts['base_id'][c] in edges[j]])
                 prob += x[c][t][i][r] == inbound
                 prob += x[c][t][i][r] == outbound
-                prob += homebase == 2
+                prob += homebase <= 2
+
+# only pair compatible requests
+for c in range(len(x)):
+    for t in range(len(x[c])):
+        for i in range(len(x[c][t])):
+            for r in range(len(requests)):
+                prob += x[c][t][i][r] <= cost[c][t][i][r]
 
 prob.writeLP("prob_data.lp")
 prob.solve()
